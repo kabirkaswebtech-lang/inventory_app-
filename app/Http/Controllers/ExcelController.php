@@ -13,7 +13,6 @@ class ExcelController extends Controller
     protected $shopifyEndpoint;
     protected $accessToken;
     protected $shopifyDomain;
-    // private $accessToken = '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';
     public function downloadFromSharePoint()
 {
 
