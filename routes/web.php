@@ -36,7 +36,27 @@ Route::get('/update-price/{sku}/{price}', [ExcelController::class, 'updatePriceB
 
 Route::post('/shopify/prices-update', [ExcelController::class, 'batchUpdateShopifyPrices'])->middleware(['auth.shopify']);
 Route::post('/shopify/inventory', [ExcelController::class, 'updateInventoryFromAjax']);
+Route::match(['get', 'post'], '/Updatepriceset', [ExcelController::class, 'updateFromSharePointset']);
+Route::match(['get', 'post'], '/Updateinventoryset', [ExcelController::class, 'updateInventoryFromDropBox']);
  Route::get('/migrate', function () {
       Artisan::call('migrate');
       return "migration  dddd successfully";
    });
+
+   Route::get('/run-cron', function () {
+    Artisan::call('schedule:run'); // Replace with your command name
+    return "Cron job executed!";
+});
+
+
+Route::get('/clear-all', function () {
+    Artisan::call('cache:clear');
+    Artisan::call('config:clear');
+    Artisan::call('route:clear');
+    Artisan::call('view:clear');
+    
+    return response()->json([
+        'status' => 'success',
+        'message' => 'Cache, config, route and view cleared successfully!'
+    ]);
+});

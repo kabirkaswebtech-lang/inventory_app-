@@ -451,6 +451,230 @@ public function updateInventoryFromAjax(Request $request)
 }
 
 
+public function updateInventoryFromDropBox()
+{
+
+    // Dropbox direct download link
+    $dropboxUrl = 'https://www.dropbox.com/scl/fi/jm2jy8kax3ap78gxuwzi4/Internet-Dealer-Inventory-Feed.CSV?rlkey=vitgth7jtonrqqk9pg074wq2b&dl=1';
+
+    try {
+        // 1. Download CSV file
+        $response = Http::get($dropboxUrl);
+        if (!$response->ok()) {
+            return response()->json(['error' => 'Failed to download file from Dropbox'], 500);
+        }
+
+        // 2. Save as temporary CSV file
+        $tempPath = storage_path('app/temp_file.csv');
+        file_put_contents($tempPath, $response->body());
+
+        // 3. Read CSV with PhpSpreadsheet CSV Reader
+        $reader = new Csv();
+        $reader->setDelimiter(',');
+        $reader->setEnclosure('"');
+        $reader->setSheetIndex(0);
+        $spreadsheet = $reader->load($tempPath);
+
+        $rows = $spreadsheet->getActiveSheet()->toArray();
+
+        // Clean up temp file
+        unlink($tempPath);
+
+        if (empty($rows) || count($rows) < 2) {
+            return response()->json(['error' => 'No data found in spreadsheet'], 400);
+        }
+
+        // 4. Map headers
+        $header          = array_map('strtolower', $rows[0]);
+        $itemNumberIndex = array_search('item_nmbr', $header);
+        $availableIndex  = array_search('available', $header);
+        $discontIndex    = array_search('discont', $header);
+        $upcIndex        = array_search('upc_code', $header);
+
+        if ($itemNumberIndex === false) {
+            return response()->json(['error' => 'Required column Item_Nmbr missing in spreadsheet'], 400);
+        }
+
+        $results = [];
+        $count   = 0;
+        $total   = count($rows) - 1; // excluding header row
+
+        // 5. Loop rows + update inventory
+        foreach (array_slice($rows, 1) as $row) {
+            try {
+                $itemNumber = $row[$itemNumberIndex] ?? null;
+                if (empty($itemNumber)) continue;
+
+                $sku       = 'PSS-' . str_replace(' ', '', trim($itemNumber));
+                $available = $row[$availableIndex] ?? null;
+                $discont   = $row[$discontIndex] ?? null;
+                $upcCode   = $row[$upcIndex] ?? null;
+
+                // Call Shopify inventory update (or your own method)
+                $updateResult = $this->getAllProducts($sku, $available);
+
+                $results[] = [
+                    'sku'       => $sku,
+                    'available' => $available,
+                    'discont'   => $discont,
+                    'upc_code'  => $upcCode,
+                    'status'    => 'success',
+                    'update'    => $updateResult
+                ];
+
+                $count++;
+
+                // Add delay except after last item
+                if ($count < $total) {
+                    if ($count % 10 === 0) {
+                        sleep(10); // every 100th request → 3 sec pause
+                    } else {
+                        sleep(2); // otherwise → 2 sec pause
+                    }
+                }
+
+            } catch (\Exception $e) {
+                $results[] = [
+                    'sku'     => $row[$itemNumberIndex] ?? 'unknown',
+                    'status'  => 'error',
+                    'message' => $e->getMessage()
+                ];
+            }
+        }
+
+        return response()->json([
+            'status'  => 'success',
+            'updated' => count($results),
+            'results' => $results
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json(['error' => 'Error: ' . $e->getMessage()], 500);
+    }
+}
+
+
+public function updateFromSharePointset()
+{
+   
+    $sharepointUrl = 'https://cuestix-my.sharepoint.com/:x:/p/andrew/ERXI0qVZDtVLgxLj42vRBFwBfnGhfeFk247aX2FuwgDTHQ?rtime=jRdFdJHY3Ug&download=1';
+
+    try {
+        // 1. Download Excel file
+        $response = Http::get($sharepointUrl);
+        if (!$response->ok()) {
+            return response()->json(['error' => 'Failed to download file from SharePoint'], 500);
+        }
+
+        // 2. Save as temporary file
+        $tempPath = storage_path('app/temp_file.xlsx');
+        file_put_contents($tempPath, $response->body());
+
+        // 3. Read spreadsheet
+        $spreadsheet = IOFactory::load($tempPath);
+        $rows = $spreadsheet->getActiveSheet()->toArray();
+
+        // Clean up temp file
+        unlink($tempPath);
+
+        if (empty($rows) || count($rows) < 2) {
+            return response()->json(['error' => 'No data found in spreadsheet'], 400);
+        }
+
+        // 4. Map headers
+        $header         = array_map('strtolower', $rows[0]);
+        $skuIndex       = array_search('sku', $header);
+        $retailIndex    = array_search('retail', $header);
+        $mapIndex       = array_search('map', $header);
+        $wholesaleIndex = array_search('wholesale', $header);
+        $updateIndex    = array_search('update', $header);
+
+        if ($skuIndex === false || $wholesaleIndex === false) {
+            return response()->json(['error' => 'Required columns missing in spreadsheet'], 400);
+        }
+
+        $data = [];
+
+        // 5. Build dataset
+        foreach (array_slice($rows, 1) as $row) {
+            $rawSku = $row[$skuIndex] ?? null;
+            if (empty($rawSku)) continue;
+
+            $sku       = 'PSS-' . str_replace(' ', '', trim($rawSku));
+            $retail    = $row[$retailIndex] ?? null;
+            $map       = $row[$mapIndex] ?? null;
+            $wholesale = $row[$wholesaleIndex] ?? null;
+            $update    = $row[$updateIndex] ?? null;
+
+            // Calculate MSRP if missing
+            if (empty($map) && empty($retail) && !empty($wholesale)) {
+                $retail = round($wholesale * 1.4, 2);
+            }
+
+            $finalPrice = !empty($retail) ? $retail : (!empty($map) ? $map : '');
+
+            $data[] = [
+                'sku'        => $sku,
+                'map'        => $map,
+                'retail'     => $retail,
+                'wholesale'  => $wholesale,
+                'update'     => $update,
+                'finalPrice' => $finalPrice,
+            ];
+        }
+
+        // 6. Transform into Shopify payload (only rows with update flag)
+        $payload = collect($data)
+            ->filter(function ($row) {
+                return !empty($row['update']);
+            })
+            ->map(function ($row) {
+                return [
+                    'sku'           => $row['sku'],
+                    'price'         => !empty($row['map']) ? $row['map'] : $row['retail'],
+                    'compare_price' => $row['retail'],
+                ];
+            })
+            ->filter(function ($item) {
+                return !empty($item['sku']) && !empty($item['price']);
+            })
+            ->values();
+
+        // 7. Update Shopify with delays
+        $results = [];
+        $count   = 0;
+        $total   = $payload->count();
+
+        foreach ($payload as $item) {
+            $results[] = $this->updateShopifyPriceBySKU(
+                $item['sku'],
+                $item['price'],
+                $item['compare_price']
+            );
+
+            $count++;
+
+            // Add delay except after last item
+            if ($count < $total) {
+                if ($count % 10 === 0) {
+                    sleep(1); // every 100th request, wait 3 seconds
+                } else {
+                    sleep(1); // otherwise, wait 2 seconds
+                }
+            }
+        }
+
+        return response()->json([
+            'total'   => $payload->count(),
+            'results' => $results,
+        ]);
+    } catch (\Exception $e) {
+        return response()->json(['error' => 'Error: ' . $e->getMessage()], 500);
+    }
+}
+
+
+
 }
 
 
