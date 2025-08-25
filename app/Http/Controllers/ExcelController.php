@@ -454,6 +454,9 @@ public function updateInventoryFromAjax(Request $request)
 public function updateInventoryFromDropBox()
 {
 
+    set_time_limit(0);
+    ini_set('memory_limit', '-1');
+
     // Dropbox direct download link
     $dropboxUrl = 'https://www.dropbox.com/scl/fi/jm2jy8kax3ap78gxuwzi4/Internet-Dealer-Inventory-Feed.CSV?rlkey=vitgth7jtonrqqk9pg074wq2b&dl=1';
 
@@ -526,10 +529,8 @@ public function updateInventoryFromDropBox()
 
                 // Add delay except after last item
                 if ($count < $total) {
-                    if ($count % 10 === 0) {
-                        sleep(10); // every 100th request → 3 sec pause
-                    } else {
-                        sleep(2); // otherwise → 2 sec pause
+                    if ($count % 100 === 0) {
+                        sleep(3); // every 100th request → 3 sec pause
                     }
                 }
 
@@ -556,6 +557,8 @@ public function updateInventoryFromDropBox()
 
 public function updateFromSharePointset()
 {
+    set_time_limit(0);
+    ini_set('memory_limit', '-1');
    
     $sharepointUrl = 'https://cuestix-my.sharepoint.com/:x:/p/andrew/ERXI0qVZDtVLgxLj42vRBFwBfnGhfeFk247aX2FuwgDTHQ?rtime=jRdFdJHY3Ug&download=1';
 
@@ -656,10 +659,8 @@ public function updateFromSharePointset()
 
             // Add delay except after last item
             if ($count < $total) {
-                if ($count % 10 === 0) {
-                    sleep(1); // every 100th request, wait 3 seconds
-                } else {
-                    sleep(1); // otherwise, wait 2 seconds
+                if ($count % 100 === 0) {
+                    sleep(3); // every 100th request, wait 3 seconds
                 }
             }
         }
