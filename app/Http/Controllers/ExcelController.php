@@ -11,9 +11,9 @@ class ExcelController extends Controller
 {
 
     protected $shopifyEndpoint;
-    protected $shopifyToken;
+    protected $accessToken;
     protected $shopifyDomain;
-    private $accessToken = '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';
+    // private $accessToken = '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';
     public function downloadFromSharePoint()
 {
 
@@ -111,7 +111,7 @@ class ExcelController extends Controller
     {
         $this->shopifyDomain = "brmidz-iw.myshopify.com";
         $this->shopifyEndpoint = 'https://brmidz-iw.myshopify.com/admin/api/2024-10/graphql.json'; // Replace with your store
-        $this->shopifyToken = env('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'); // Put your token in .env
+        $this->accessToken = env('SHOPIFY_ACCESS_TOKEN');
     }
 
     /**
