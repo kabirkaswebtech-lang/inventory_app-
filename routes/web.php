@@ -36,9 +36,11 @@ Route::get('/update-price/{sku}/{price}', [ExcelController::class, 'updatePriceB
 
 Route::post('/shopify/prices-update', [ExcelController::class, 'batchUpdateShopifyPrices'])->middleware(['auth.shopify']);
 Route::post('/shopify/inventory', [ExcelController::class, 'updateInventoryFromAjax']);
-Route::match(['get', 'post'], '/Updatepriceset', [ExcelController::class, 'updateFromSharePointset']);
-Route::match(['get', 'post'], '/Updateinventoryset', [ExcelController::class, 'updateInventoryFromDropBox']);
- Route::get('/migrate', function () {
+// Route::match(['get', 'post'], '/Updatepriceset', [ExcelController::class, 'updateFromSharePointset']);
+// Route::match(['get', 'post'], '/Updateinventoryset', [ExcelController::class, 'updateInventoryFromDropBox']);
+Route::get('/Updatepriceset', [ExcelController::class, 'updateFromSharePointset']);
+Route::get('/Updateinventoryset', [ExcelController::class, 'updateFromSharePointset']);
+Route::get('/migrate', function () {
       Artisan::call('migrate');
       return "migration  dddd successfully";
    });
